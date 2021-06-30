@@ -1,0 +1,116 @@
+:root {
+    --board_size: 600px
+}
+
+*, *::after, *::before {
+    background-repeat:no-repeat;
+    background-size: auto;
+}
+
+#board-container {
+    position: relative;
+    width: var(--board_size);
+    height: var(--board_size);
+}
+
+#board {
+    display: inline-block;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-image: url('./svgs/brown.svg');
+}
+
+#promotions-container {
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    background-color: rgb(0, 1, 0, 0.1);
+    position: absolute;
+}
+
+.promotion-piece {
+    position: relative;
+    background-size: cover;
+    width: 100%;
+    height: 25%;
+}
+
+.promotions {
+    border-radius: calc(var(--board_size)/50);
+    z-index: 3;
+    width: 12.5%;
+    height: 50%;
+    display: flex;
+    position: absolute;
+}
+
+.promotions.top {
+    top: 0;
+    background-color: rgb(124, 104, 80);
+    flex-direction: column;
+}
+
+.promotions.bottom {
+    bottom: 0;
+    background-color: rgb(181, 184, 169);
+    flex-direction: column-reverse;
+}
+
+.piece, .legal{
+    box-sizing: border-box;
+    position: absolute;
+    background-size: cover;
+    width: 12.5%;
+    height: 12.5%;
+}
+
+.R {
+    background-image: url('./svgs/white_rook.svg');
+}
+.Q {
+    background-image: url('./svgs/white_queen.svg');
+}
+.P {
+    background-image: url('./svgs/white_pawn.svg');
+}
+.K {
+    background-image: url('./svgs/white_king.svg');
+}
+.N {
+    background-image: url('./svgs/white_knight.svg');
+}
+.B {
+    background-image: url('./svgs/white_bishop.svg');
+}
+
+.r {
+    background-image: url('./svgs/black_rook.svg');
+}
+.q {
+    background-image: url('./svgs/black_queen.svg');
+}
+.p {
+    background-image: url('./svgs/black_pawn.svg');
+}
+.k {
+    background-image: url('./svgs/black_king.svg');
+}
+.n {
+    background-image: url('./svgs/black_knight.svg');
+}
+.b {
+    background-image: url('./svgs/black_bishop.svg');
+}
+
+.moving {
+    z-index: 2;
+}
+
+.legal {
+    padding: 4.5%;
+    background-clip: content-box;
+    background-color: rgb(0, 0, 0, 0.2);
+    border-width: 1%;
+    border-radius: 50%;
+}

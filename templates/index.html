@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="{{url_for('static', filename='models.js')}}" defer></script>
+    <script src="{{url_for('static', filename='chess.js')}}" defer></script>
+    <link rel="stylesheet" href="{{url_for('static', filename='css/styles.css')}}">
+</head>
+<body>
+    <p>test</p>
+    <p id='results'></p>
+    <div id='board-container'>
+        <div id='board'>
+        </div>
+        <div id='promotions-container' style='display: none;'>
+            <div class='promotions top' style='display: none;'>
+                <div class='Q promotion-piece'></div>
+                <div class='N promotion-piece'></div>
+                <div class='R promotion-piece'></div>
+                <div class='B promotion-piece'></div>
+            </div>
+            <div class='promotions bottom' style='display: none;'>
+                <div class='q promotion-piece'></div>
+                <div class='n promotion-piece'></div>
+                <div class='r promotion-piece'></div>
+                <div class='b promotion-piece'></div>
+            </div>
+        </div>
+        <div id='helpers-container'>
+
+        </div>
+    </div>
+    <button name='flip' onclick=flipBoard()>Flip</button>
+    <button name='play_white' onclick=resetBoard(true)>Play as White</button>
+    <button name='play_black' onclick=resetBoard(false)>Play as Black</button>
+</body>
+</html>
