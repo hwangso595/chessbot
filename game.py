@@ -4,6 +4,9 @@ import numpy as np
 import sys
 import numpy
 import time
+import os
+from hyper_params import MAX_MEM, NUM_SAVE_POSITIONS, STORE_DATA_BASE, CHESS_GAMES_PATH
+
 numpy.set_printoptions(threshold=sys.maxsize)
 
 num_letter = {
@@ -20,12 +23,124 @@ SECOND_PLAYER = chess.BLACK
 # in the simulation is not flipped (for displaying purposes).
 # Take this into account when converting actions and states from/to MCTS and Environment
 
+def generate_data_set_test(num_samples=NUM_SAVE_POSITIONS):
+    states = np.zeros((MAX_MEM, 8, 8, 20), dtype=np.float32)
+    values = np.zeros(MAX_MEM, dtype=np.float32)
+    policies = np.zeros((MAX_MEM, 4672), dtype=np.float32)
+    move_count = 0
+    gn = 0
+    samples = 0
+    results_value = {'1/2-1/2': 0, '0-1': -1, '1-0': 1}
+    file_num = 0
+    # pgn files in the data folder
+    for pgn_n, fn in enumerate(os.listdir(CHESS_GAMES_PATH)):
+        pgn = open(os.path.join(CHESS_GAMES_PATH, fn))
+        while 1:
+            game = chess.pgn.read_game(pgn)
+            if game is None:
+                print('game')
+                break
+            result = game.headers['Result']
+            if result not in results_value:
+                print('result')
+                continue
+            value = results_value[result]
+            loser = None if value == 0 else (chess.WHITE if value == -1 else chess.BLACK)
+            board = game.board()
+            for i, move in enumerate(game.mainline_moves()):
+                policy = np.zeros(4672)
+                state = Game.get_state(board)
+                states[move_count] = state
+                values[move_count] = value * (1 if board.turn == chess.WHITE else -1)
+                mirrored = move
+                if board.turn == chess.BLACK:
+                    mirrored = chess.Move(from_square=chess.square_mirror(move.from_square),
+                                      to_square=chess.square_mirror(move.to_square), promotion=move.promotion)
+                try:
+                    policy[convert_move_action(mirrored)] = 1
+                except KeyError as err:
+                    print(board, move, board.turn)
+                    raise KeyError(err)
+                policies[move_count] = policy
+                board.push(move)
+                move_count += 1
+                samples += 1
+                if move_count == MAX_MEM:
+                    print('STORING GAMES')
 
-def convert_action_move(action, piece_type_orig, player_turn):
+                    np.savez(os.path.join(STORE_DATA_BASE, f'training_{file_num}.npz'), state_list=states,
+                             move_probability_list=policies, reward_list=values)
+                    print('stored')
+                    move_count = 0
+                    file_num += 1
+                if samples > num_samples:
+                    return
+            print("parsing game %d, got %d examples" % (gn, move_count))
+            gn += 1
+        print(f'parsed pgn {pgn}')
+
+def generate_data_set(num_samples=NUM_SAVE_POSITIONS):
+    states = np.zeros((MAX_MEM, 8, 8, 20), dtype=np.float32)
+    values = np.zeros(MAX_MEM, dtype=np.float32)
+    policies = np.zeros((MAX_MEM, 4672), dtype=np.float32)
+    move_count = 0
+    gn = 0
+    samples = 0
+    results_value = {'1/2-1/2': 0, '0-1': -1, '1-0': 1}
+    file_num = 0
+    # pgn files in the data folder
+    for pgn_n, fn in enumerate(os.listdir(CHESS_GAMES_PATH)):
+        pgn = open(os.path.join(CHESS_GAMES_PATH, fn))
+        while 1:
+            game = chess.pgn.read_game(pgn)
+            if game is None:
+                print('game')
+                break
+            result = game.headers['Result']
+            if result not in results_value:
+                print('result')
+                continue
+            value = results_value[result]
+            loser = None if value == 0 else (chess.WHITE if value == -1 else chess.BLACK)
+            board = game.board()
+            for i, move in enumerate(game.mainline_moves()):
+                policy = np.zeros(4672)
+                state = Game.get_state(board)
+                states[move_count] = state
+                values[move_count] = value * (1 if board.turn == chess.WHITE else -1)
+                mirrored = move
+                if board.turn == chess.BLACK:
+                    mirrored = chess.Move(from_square=chess.square_mirror(move.from_square),
+                                      to_square=chess.square_mirror(move.to_square), promotion=move.promotion)
+                try:
+                    if board.turn != loser:
+                        policy[convert_move_action(mirrored)] = 1
+                except KeyError as err:
+                    print(board, move, board.turn)
+                    raise KeyError(err)
+                policies[move_count] = policy
+                board.push(move)
+                move_count += 1
+                samples += 1
+                if move_count == MAX_MEM:
+                    print('STORING GAMES')
+
+                    np.savez(os.path.join(STORE_DATA_BASE, f'training_{file_num}.npz'), state_list=states,
+                             move_probability_list=policies, reward_list=values)
+                    print('stored')
+                    move_count = 0
+                    file_num += 1
+                if samples > num_samples:
+                    return
+            print("parsing game %d, got %d examples" % (gn, move_count))
+            gn += 1
+        print(f'parsed pgn {pgn}')
+
+def convert_action_move(action, board, player_turn):
     """
     converts action index to chess.Move object
     :param action:
-    :param piece_type_orig:
+    :param board:
     :param player_turn:
     :return:
     """
@@ -39,7 +154,7 @@ def convert_action_move(action, piece_type_orig, player_turn):
     if move_info < 56:
         # queen move
         # move_info = direction_base + distance * 8
-        distance = move_info // 8
+        distance = move_info // 8 + 1
         direction_base = move_info % 8
         # queen_direction maps direction_base to amount of squares to add from from_sqaure to reach the direction
         queen_direction = {
@@ -48,7 +163,8 @@ def convert_action_move(action, piece_type_orig, player_turn):
         to_square += queen_direction[direction_base] * distance
         # pawn promote to queen
         row_target = to_square // 8
-        if piece_type_orig == chess.PAWN and (row_target == 7 or row_target == 1):
+        pawn_square = chess.square_mirror(from_square) if player_turn == chess.BLACK else from_square
+        if board.piece_at(pawn_square).piece_type == chess.PAWN and (row_target == 7 or row_target == 0):
             promotion = chess.QUEEN
     elif move_info < 64:
         knight_move_base = move_info - 56
@@ -152,14 +268,19 @@ def convert_move_action(move):
 
 
 class Game:
-    def __init__(self, fen=chess.STARTING_FEN):
+    def __init__(self, fen=chess.STARTING_FEN, state=None):
         self.board = chess.Board(fen)
-        self.black = None
-        self.white = None
         self.observation_space = (8, 8, 20)
-        self.state = self._update_state()
+        if state is None:
+            self.state = self.get_state(self.board)
+        else:
+            self.state = state
         self.action_space = 4672
         self.done = False
+
+    def __copy__(self):
+        new_game = Game(self.board.fen(), self.state.copy())
+        return new_game
 
     def render(self):
         print(self.board)
@@ -167,26 +288,28 @@ class Game:
 
     def reset(self):
         self.board.reset()
-        self.state = self._update_state()
+        self.state = self.get_state(self.board)
         self.done = False
         return self.state
 
-    def _update_state(self):
+    @staticmethod
+    def get_state(board):
         new_state = np.zeros((8, 8, 20), dtype=np.uint8)
-        new_state[:, :, 0].fill(self.board.has_queenside_castling_rights(chess.WHITE))
-        new_state[:, :, 1].fill(self.board.has_kingside_castling_rights(chess.WHITE))
-        new_state[:, :, 2].fill(self.board.has_queenside_castling_rights(chess.BLACK))
-        new_state[:, :, 3].fill(self.board.has_kingside_castling_rights(chess.BLACK))
-        new_state[:, :, 4].fill(self.board.turn)
-        new_state[7 - (self.board.halfmove_clock // 16), (self.board.halfmove_clock // 2) % 8, 5] = True
+        new_state[:, :, 0].fill(board.has_queenside_castling_rights(chess.WHITE))
+        new_state[:, :, 1].fill(board.has_kingside_castling_rights(chess.WHITE))
+        new_state[:, :, 2].fill(board.has_queenside_castling_rights(chess.BLACK))
+        new_state[:, :, 3].fill(board.has_kingside_castling_rights(chess.BLACK))
+        new_state[:, :, 4].fill(board.turn)
+        new_state[7 - (board.halfmove_clock // 16), (board.halfmove_clock // 2) % 8, 5] = True
         new_state[:, :, 6].fill(True)
-        new_state[:, :, 7:19] = self._get_board_array()
-        new_state[:, :, 19].fill(self.board.is_repetition(2))
+        new_state[:, :, 7:19] = Game.get_board_array(board)
+        new_state[:, :, 19].fill(board.is_repetition(2))
         return new_state
 
-    def _get_board_array(self):
+    @staticmethod
+    def get_board_array(board):
         # boards, identical when flipped, are valued equally according to MCTS
-        board = self.board if self.board.turn == chess.WHITE else self.board.mirror()
+        board = board if board.turn == chess.WHITE else board.mirror()
         board_list = [chess.SquareSet(chess.BB_EMPTY) for _ in range(12)]
         pieces = [chess.PAWN, chess.BISHOP, chess.KNIGHT, chess.ROOK, chess.QUEEN, chess.KING]
         players = [chess.WHITE, chess.BLACK]
@@ -207,7 +330,7 @@ class Game:
                 board_list[6].remove(square - 8)
                 board_list[6].add(dest_square)
         return np.unpackbits(np.array(board_list, dtype=np.uint64).view(dtype=np.uint8)).\
-            reshape([8, 8, len(board_list)])
+            reshape([len(board_list), 8, 8]).transpose(1, 2, 0)
 
     def step(self, action, update_state=True):
         if self.done:
@@ -215,9 +338,9 @@ class Game:
         move = convert_action_move_exists(action, self.board, self.board.turn)
 
         self.board.push(move)
-        new_state = self._update_state()
+        new_state = self.get_state(self.board)
         reward = 0
-        outcome = self.board.outcome(claim_draw=True)
+        outcome = self.board.outcome()
         # change reward so the reward is in perspective to the last player
         done = False
         if outcome is not None:
@@ -229,6 +352,9 @@ class Game:
                     reward = 1 if result[0] == '1' else -1
                 else:
                     reward = 1 if result[1] == '1' else -1
+            done = True
+        if self.board.can_claim_fifty_moves():
+            reward = 0
             done = True
         if update_state:
             self.state = new_state
@@ -300,12 +426,15 @@ def play_game(game_count, print_value):
 
 
 if __name__ == '__main__':
-    import concurrent.futures
-    start = time.time()
-    print_values = np.zeros(10)
-    game_counts = np.arange(10)
-    # print_values[-1] = 1
-    with concurrent.futures.ProcessPoolExecutor() as execute:
-        results = [list(execute.map(play_game, game_counts, print_values))]
-    # play_game(0, 1)
-    print(time.time() - start)
+    # import concurrent.futures
+    #
+    # start = time.time()
+    # print_values = np.zeros(10)
+    # game_counts = np.arange(10)
+    # # print_values[-1] = 1
+    # with concurrent.futures.ProcessPoolExecutor() as execute:
+    #     results = [list(execute.map(play_game, game_counts, print_values))]
+    # # play_game(0, 1)
+    # print(time.time() - start)
+
+    generate_data_set_test()

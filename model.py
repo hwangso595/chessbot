@@ -8,36 +8,36 @@ class ResidualLayer(layers.Layer):
         super().__init__()
         self.conv1 = layers.Conv2D(filters, kernel_size, padding='same',
                                    kernel_regularizer=kernel_regularizer)
-        self.b_norm1 = layers.BatchNormalization()
+        self.b_norm1 = layers.BatchNormalization(momentum=BATCH_MOMENTUM)
         self.relu1 = layers.ReLU()
         self.conv2 = layers.Conv2D(filters, kernel_size, padding='same',
                                    kernel_regularizer=kernel_regularizer)
-        self.b_norm2 = layers.BatchNormalization()
+        self.b_norm2 = layers.BatchNormalization(momentum=BATCH_MOMENTUM)
         self.add = layers.Add()
         self.relu2 = layers.ReLU()
 
     def call(self, x, training=False):
         y = self.conv1(x)
-        y = self.b_norm1(y)
+        y = self.b_norm1(y, training=training)
         y = self.relu1(y)
         y = self.conv2(y)
-        y = self.b_norm2(y)
+        y = self.b_norm2(y, training=training)
         out = self.add([x, y])
         out = self.relu2(out)
         return out
 
 
-class ConvolutionalLayer(layers.Layer):
+class ConvolutionalLayer(models.Model):
     def __init__(self, filters, kernel_size, kernel_regularizer):
         super().__init__()
         self.conv = layers.Conv2D(filters, kernel_size, padding='same',
                                   kernel_regularizer=kernel_regularizer)
-        self.b_norm = layers.BatchNormalization()
+        self.b_norm = layers.BatchNormalization(momentum=BATCH_MOMENTUM)
         self.relu = layers.ReLU()
 
     def call(self, x, training=False):
         y = self.conv(x)
-        y = self.b_norm(y)
+        y = self.b_norm(y, training=training)
         out = self.relu(y)
         return out
 
@@ -45,9 +45,9 @@ class ConvolutionalLayer(layers.Layer):
 class ValueHead(layers.Layer):
     def __init__(self, hidden_layer, kernel_regularizer, name='value1_head'):
         super().__init__(name=name)
-        self.conv1 = layers.Conv2D(1, 1, padding='same',
+        self.conv1 = layers.Conv2D(4, 1, padding='same',
                                    kernel_regularizer=kernel_regularizer)
-        self.b_norm1 = layers.BatchNormalization()
+        self.b_norm1 = layers.BatchNormalization(momentum=BATCH_MOMENTUM)
         self.relu1 = layers.ReLU()
         self.flatten1 = layers.Flatten()
         self.fc1 = layers.Dense(hidden_layer,
@@ -58,7 +58,7 @@ class ValueHead(layers.Layer):
 
     def call(self, x, training=False):
         y = self.conv1(x)
-        y = self.b_norm1(y)
+        y = self.b_norm1(y, training=training)
         y = self.relu1(y)
         y = self.flatten1(y)
         y = self.fc1(y)
@@ -70,15 +70,15 @@ class ValueHead(layers.Layer):
 class PolicyHead(layers.Layer):
     def __init__(self, output_size, kernel_regularizer, name='policy1_head'):
         super().__init__(name=name)
-        self.conv1 = layers.Conv2D(2, 1, padding='same', kernel_regularizer=kernel_regularizer)
-        self.b_norm1 = layers.BatchNormalization()
+        self.conv1 = layers.Conv2D(4, 1, padding='same', kernel_regularizer=kernel_regularizer)
+        self.b_norm1 = layers.BatchNormalization(momentum=BATCH_MOMENTUM)
         self.relu1 = layers.ReLU()
         self.flatten = layers.Flatten()
         self.dense = layers.Dense(output_size, kernel_regularizer=kernel_regularizer)
 
     def call(self, x, training=False):
         y = self.conv1(x)
-        y = self.b_norm1(y)
+        y = self.b_norm1(y, training=training)
         y = self.relu1(y)
         y = self.flatten(y)
         out = self.dense(y)
@@ -94,12 +94,12 @@ class AlphaZeroNetwork(models.Model):
         self.policy_head = PolicyHead(num_actions, kernel_regularizer=tf.keras.regularizers.L2(l2=l2))
         self.residual_layers = residual_layers
 
-    def call(self, inputs, *args, **kwargs):
-        y = self.conv(inputs)
+    def call(self, inputs, training=False):
+        y = self.conv(inputs, training=training)
         for i in range(self.residual_layers):
-            y = self.residual(y)
-        value = self.value_head(y)
-        policy = self.policy_head(y)
+            y = self.residual(y, training=training)
+        value = self.value_head(y, training=training)
+        policy = self.policy_head(y, training=training)
         return value, policy
 
     def get_config(self):
